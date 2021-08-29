@@ -1,21 +1,22 @@
 import xml.etree.ElementTree as et
 from sortedcontainers import SortedDict
-from collections import Counter
+from collections import Counter, defaultdict
 import re
 import nltk
 import string
 from nltk.stem import WordNetLemmatizer
 from Stemmer import Stemmer
 from nltk.corpus import stopwords as nltk_stopwords
+import time
 
 prefix = '{http://www.mediawiki.org/xml/export-0.10/}'
 page_dict = {}
 index_dir = "."
-words_dict = SortedDict({})
-try_till = 200
+words_dict = SortedDict({})  #defaultdict(list)
+try_till = None
 stopwords = list(nltk_stopwords.words('english'))
 url_stopwords = ["www", "com", "http", "https", "net", "org", "html", "ftp", "archives", "pdf", "jpg", "jpeg", "gif", "png", "txt", "redirect"]
-punctuations = list(string.punctuation) + [' ', '\t', '\n']
+punctuations = list(string.punctuation) + [' ', '_', '\t', '\n']
 digits = [str(x) for x in range(10)]
 max_wordlen = 12
 min_wordlen = 3
@@ -33,25 +34,30 @@ def is_english(word):
         return True
 
 def tokenize(data):
-    tokens = re.findall("\d+|[\w]+",data)  ## remove symbols by split text
+    tokens = re.findall("\d+|[\w]+",str(data))  ## remove symbols by split text
     tokens = [str(w).lower() for w in tokens if len(w)>=min_wordlen and len(w)<=max_wordlen]  ## casefolding & utf encoding
     # i = 0
     good_tokens = []
+    rpun = '[' + re.escape(''.join(punctuations)) + ']'
+    rdig = '[' + re.escape(''.join(digits)) + ']'
     for t in tokens:
-        temp = ""
-        for c in t:
-            c = str(c)
-            if (c in digits) or (not is_english(c)):
-                continue
-            temp += c
-        if len(temp) >= min_wordlen:
+        temp = re.sub(rpun, '', t)
+        temp = re.sub(rdig, '', temp)
+        # for c in t:
+        #     c = str(c)
+        #     if (c in digits) or (not is_english(c)) or (c in punctuations):
+        #         continue
+        #     temp += c
+        if len(temp) >= min_wordlen and is_english(temp):
             good_tokens.append(temp)
         # i += 1
     return good_tokens
 
 def remove_stopwords(words):
     good_words = []
+    # rstop = '[' + re.escape(''.join(stopwords)) + ']'
     for w in words:
+        # temp = re.sub(rpun, '', t)
         if w in stopwords or w in url_stopwords:
             continue
         good_words.append(w)
@@ -96,18 +102,19 @@ def parseXML(xmlfile):
                     curpage_counts[w] = [i,0,0]
                 curpage_counts[w][2] += c
         for w,c in curpage_counts.items():
-            if w not in words_dict:
-                words_dict[w] = []
-            words_dict[w].append(c)
-            # print(ptxt.text)
-            # print("\n=====================================================================================\n\n")
-        if i==try_till:
+            temp = words_dict.get(w,0)
+            if temp==0:
+                temp = []
+                # print(temp,type(temp),temp.append(c),c)
+            temp.append(c)
+            words_dict[w] = temp
+        if try_till and i==try_till:
             break
         i+=1    
     # print(page_dict)
     write_partial_index()
     write_inverted_index()
-    print(words_dict)
+    # print(words_dict)
 
 
 def write_partial_index():
@@ -132,11 +139,14 @@ def downloads():
 
 if __name__ == "__main__":
     ##downloads()
+    # print("mansi".encode('utf-8'))
+    start = time.time()
     parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
-    # data = "ma[ns)] +=ik23}h'a@am!ka,r"
+    # data = "ma[ns)] +=ik23}h'a@am!ka,rdh_oble"
     # print(re.findall("\d+|[\w]+",data))
     # print(list(string.punctuation))
     # nltk.download('stopwords')
     # print(nltk_stopwords.words('english'))
+    print("time:",time.time()-start)
 
 
