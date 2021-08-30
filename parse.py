@@ -72,12 +72,81 @@ def process_words(words,lem):
 
 def process_text(content,ctype):
     global use_lematizer
-    tokens = tokenize(content)
-    words = process_words(tokens,use_lematizer)
+    if ctype=='title':
+        tokens = tokenize(content)
+        words = process_words(tokens,use_lematizer)
+    if ctype=='body':
+        external_links = get_external_links(content)
+        categories = get_categories(content)
     # print(words)
     return words
 
+def get_external_links(content):
+    links = ""
+    lines = content.split("==External links==")
+    if len(lines) > 1:
+        lines = lines[1].split("\n")
+        for i in range(len(lines)):
+            if '* [' in lines[i] or '*[' in lines[i] or '[http' in lines[i]:
+                links += lines[i]
+    return links
 
+def get_sections(content) :
+    text, categories, links, info = [], [], [], []
+    flgt, flgc, flgl, flgi = True, False, False, False
+    print(flgt, flgc, flgl, flgi)
+    lines = content.split('\n')
+    i = 0
+    # while i < len(lines):
+
+
+def get_categories(content):  
+  info, bodyText, category, links = [], [], [], []
+  flagtext = 1
+  lines = data.split('\n')
+  # pdb.set_trace()
+  for i in xrange(len(lines)):
+    if '{{infobox' in lines[i]:
+      flag = 0
+      temp = lines[i].split('{{infobox')[1:]
+      info.extend(temp)
+      while True:
+            if '{{' in lines[i]:
+                flag += lines[i].count('{{')
+            if '}}' in lines[i]:
+                flag -= lines[i].count('}}')
+            if flag <= 0:
+                break
+            i += 1
+            try:
+                info.append(lines[i])
+            except:
+                break
+    elif flagtext:
+      if '[[category' in lines[i] or '==external links==' in lines[i]:
+        flagtext = 0
+      bodyText.extend(lines[i].split())
+
+    else:
+      if "[[category" in lines[i]:
+        line = data.split("[[category:")
+        if len(line)>1:
+            category.extend(line[1:-1])
+            temp = line[-1].split(']]')
+            category.append(temp[0])
+    #   pdb.set_trace()
+
+  # Process category, info and bodyText
+  category = cleanup_list(category, already_lowercase=True)
+  info = cleanup_list(info, already_lowercase=True)
+  bodyText = cleanup_list(bodyText, already_lowercase=True)
+
+  # Count frequencies of all the words in the respective sections
+  info = create__word_to_freq_defaultdict(info)
+  bodyText = create__word_to_freq_defaultdict(bodyText)
+  category = create__word_to_freq_defaultdict(category)
+
+  return info, bodyText, category
 
 def parseXML(xmlfile):
     global page_dict, try_till
@@ -140,13 +209,13 @@ def downloads():
 if __name__ == "__main__":
     ##downloads()
     # print("mansi".encode('utf-8'))
-    start = time.time()
-    parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
+    # start = time.time()
+    # parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
     # data = "ma[ns)] +=ik23}h'a@am!ka,rdh_oble"
     # print(re.findall("\d+|[\w]+",data))
     # print(list(string.punctuation))
     # nltk.download('stopwords')
     # print(nltk_stopwords.words('english'))
-    print("time:",time.time()-start)
+    # print("time:",time.time()-start)
 
 
