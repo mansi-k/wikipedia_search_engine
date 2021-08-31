@@ -141,8 +141,8 @@ def parseXML(xmlfile):
             page_dict[i] = pid.text
             cur_words = process_text(pid.text,'title')
             for w,c in Counter(cur_words).items():
-                curpage_counts[w] = [i,c,0,0,0,0]  ## doc_id, title, text, cat, link, info
-                # curpage_counts[w][1] += c
+                # curpage_counts[w] = [i,c,0,0,0,0]  ## doc_id, title, text, cat, link, info
+                curpage_counts[w] = str(i)+",t"+str(c)
         for ptxt in page.iter(prefix+'text'):
             if not ptxt.text:
                 continue
@@ -151,33 +151,34 @@ def parseXML(xmlfile):
             ## text words
             for w,c in Counter(text).items():
                 if w not in curpage_counts:
-                    curpage_counts[w] = [i,0,c,0,0,0]
+                    curpage_counts[w] = str(i)+";b"+str(c)
                 else:
-                    curpage_counts[w][2] += c
+                    curpage_counts[w] += ";b"+str(c)
             ## category words
             for w,c in Counter(categories).items():
                 if w not in curpage_counts:
-                    curpage_counts[w] = [i,0,0,c,0,0]
+                    curpage_counts[w] = str(i)+";c"+str(c)
                 else:
-                    curpage_counts[w][3] += c
+                    curpage_counts[w] += ";c"+str(c)
             ## links words
             for w,c in Counter(links).items():
                 if w not in curpage_counts:
-                    curpage_counts[w] = [i,0,0,0,c,0]
+                    curpage_counts[w] = str(i)+";l"+str(c)
                 else:
-                    curpage_counts[w][4] += c
+                    curpage_counts[w] += ";l"+str(c)
             ## info words
             for w,c in Counter(info).items():
                 if w not in curpage_counts:
-                    curpage_counts[w] = [i,0,0,0,0,c]
+                    curpage_counts[w] = str(i)+";i"+str(c)
                 else:
-                    curpage_counts[w][5] += c
+                    curpage_counts[w] += ";i"+str(c)
         for w,c in curpage_counts.items():
             temp = words_dict.get(w,0)
             if temp==0:
                 temp = []
                 # print(temp,type(temp),temp.append(c),c)
             temp.append(c)
+            # temp += ""
             words_dict[w] = temp
         if try_till and i==try_till:
             break
@@ -200,7 +201,8 @@ def write_inverted_index():
         for w,cl in words_dict.items():
             cur_line = w
             for c in cl:
-                cur_line = cur_line + '|' + ",".join([str(x) for x in c])
+                cur_line = cur_line + '|' + c
+                # cur_line = cur_line + '|' + ",".join([str(x) for x in c])
             f.write(cur_line+'\n')
 
 def downloads():
