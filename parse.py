@@ -36,21 +36,14 @@ def is_english(word):
 def tokenize(data):
     tokens = re.findall("\d+|[\w]+",str(data))  ## remove symbols by split text
     tokens = [str(w).lower() for w in tokens if len(w)>=min_wordlen and len(w)<=max_wordlen]  ## casefolding & utf encoding
-    # i = 0
     good_tokens = []
     rpun = '[' + re.escape(''.join(punctuations)) + ']'
     rdig = '[' + re.escape(''.join(digits)) + ']'
     for t in tokens:
         temp = re.sub(rpun, '', t)
         temp = re.sub(rdig, '', temp)
-        # for c in t:
-        #     c = str(c)
-        #     if (c in digits) or (not is_english(c)) or (c in punctuations):
-        #         continue
-        #     temp += c
         if len(temp) >= min_wordlen and is_english(temp):
             good_tokens.append(temp)
-        # i += 1
     return good_tokens
 
 def remove_stopwords(words):
@@ -72,81 +65,66 @@ def process_words(words,lem):
 
 def process_text(content,ctype):
     global use_lematizer
+    # if not content:
+    #     return None
     if ctype=='title':
         tokens = tokenize(content)
         words = process_words(tokens,use_lematizer)
+        return words
     if ctype=='body':
-        external_links = get_external_links(content)
-        categories = get_categories(content)
-    # print(words)
-    return words
+        text, categories, links, info = get_sections(content)
+        text = tokenize(text)
+        text = process_words(text,use_lematizer)
+        categories = tokenize(categories)
+        categories = process_words(categories,use_lematizer)
+        links = tokenize(links)
+        links = process_words(links,use_lematizer)
+        info = tokenize(info)
+        info = process_words(info,use_lematizer)
+        return text, categories, links, info
 
-def get_external_links(content):
-    links = ""
-    lines = content.split("==External links==")
-    if len(lines) > 1:
-        lines = lines[1].split("\n")
-        for i in range(len(lines)):
-            if '* [' in lines[i] or '*[' in lines[i] or '[http' in lines[i]:
-                links += lines[i]
-    return links
+# def get_external_links(content):
+#     links = ""
+#     lines = content.split("==External links==")
+#     if len(lines) > 1:
+#         lines = lines[1].split("\n")
+#         for i in range(len(lines)):
+#             if '* [' in lines[i] or '*[' in lines[i] or '[http' in lines[i]:
+#                 links += lines[i]
+#     return links
 
 def get_sections(content) :
-    text, categories, links, info = [], [], [], []
-    flgt, flgc, flgl, flgi = True, False, False, False
-    print(flgt, flgc, flgl, flgi)
+    text, categories, links, info = "", "", "", ""
+    # flgt, flgc, flgl, flgi = True, False, False, False
+    # print(flgt, flgc, flgl, flgi)
     lines = content.split('\n')
     i = 0
-    # while i < len(lines):
-
-
-def get_categories(content):  
-  info, bodyText, category, links = [], [], [], []
-  flagtext = 1
-  lines = data.split('\n')
-  # pdb.set_trace()
-  for i in xrange(len(lines)):
-    if '{{infobox' in lines[i]:
-      flag = 0
-      temp = lines[i].split('{{infobox')[1:]
-      info.extend(temp)
-      while True:
-            if '{{' in lines[i]:
-                flag += lines[i].count('{{')
-            if '}}' in lines[i]:
-                flag -= lines[i].count('}}')
-            if flag <= 0:
-                break
+    n = len(lines)
+    while i < n:
+        # print(lines[i], type(lines[i]))
+        if "[[Category" in lines[i]:
+            line = lines[i].split("[[Category:")
+            if len(line)>1:
+                categories += " "+line[1].split(']]')[0]
+        elif "{{Infobox" in lines[i]:
+            # print(lines[i].split("{{Infobox")[1])
+            info += " "+lines[i].split("{{Infobox")[1]
             i += 1
-            try:
-                info.append(lines[i])
-            except:
-                break
-    elif flagtext:
-      if '[[category' in lines[i] or '==external links==' in lines[i]:
-        flagtext = 0
-      bodyText.extend(lines[i].split())
-
-    else:
-      if "[[category" in lines[i]:
-        line = data.split("[[category:")
-        if len(line)>1:
-            category.extend(line[1:-1])
-            temp = line[-1].split(']]')
-            category.append(temp[0])
-    #   pdb.set_trace()
-
-  # Process category, info and bodyText
-  category = cleanup_list(category, already_lowercase=True)
-  info = cleanup_list(info, already_lowercase=True)
-  bodyText = cleanup_list(bodyText, already_lowercase=True)
-
-  # Count frequencies of all the words in the respective sections
-  info = create__word_to_freq_defaultdict(info)
-  bodyText = create__word_to_freq_defaultdict(bodyText)
-  category = create__word_to_freq_defaultdict(category)
-
-  return info, bodyText, category
+            while i < n and '=' in lines[i]:
+                info += " "+lines[i].split('=')[1]
+                i += 1
+        elif "==External links==" in lines[i]:
+            links += " "+lines[i].split("==External links==")[1]
+            i += 1
+            syms = ['* [', '*[', '*{{', '* {{', 'http']
+            rsym = '[' + re.escape(''.join(syms)) + ']'
+            while i < n and ('* [' in lines[i] or '*[' in lines[i] or 'http' in lines[i] or '* {{' in lines[i]):
+                links += " "+lines[i]
+                i += 1
+        else:
+            text += " "+lines[i]
+        i += 1
+    return text, categories, links, info
 
 def parseXML(xmlfile):
     global page_dict, try_till
@@ -158,18 +136,42 @@ def parseXML(xmlfile):
         curpage_counts = {}
         page_dict[i] = ""
         for pid in page.iter(prefix+'title'):
+            if not pid.text:
+                continue
             page_dict[i] = pid.text
             cur_words = process_text(pid.text,'title')
             for w,c in Counter(cur_words).items():
-                curpage_counts[w] = [i,0,0]
-                curpage_counts[w][1] += c
+                curpage_counts[w] = [i,c,0,0,0,0]  ## doc_id, title, text, cat, link, info
+                # curpage_counts[w][1] += c
         for ptxt in page.iter(prefix+'text'):
+            if not ptxt.text:
+                continue
             cur_txt = ptxt.text
-            cur_words = process_text(ptxt.text,'body')
-            for w,c in Counter(cur_words).items():
+            text, categories, links, info = process_text(ptxt.text,'body')
+            ## text words
+            for w,c in Counter(text).items():
                 if w not in curpage_counts:
-                    curpage_counts[w] = [i,0,0]
-                curpage_counts[w][2] += c
+                    curpage_counts[w] = [i,0,c,0,0,0]
+                else:
+                    curpage_counts[w][2] += c
+            ## category words
+            for w,c in Counter(categories).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = [i,0,0,c,0,0]
+                else:
+                    curpage_counts[w][3] += c
+            ## links words
+            for w,c in Counter(links).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = [i,0,0,0,c,0]
+                else:
+                    curpage_counts[w][4] += c
+            ## info words
+            for w,c in Counter(info).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = [i,0,0,0,0,c]
+                else:
+                    curpage_counts[w][5] += c
         for w,c in curpage_counts.items():
             temp = words_dict.get(w,0)
             if temp==0:
@@ -183,7 +185,7 @@ def parseXML(xmlfile):
     # print(page_dict)
     write_partial_index()
     write_inverted_index()
-    # print(words_dict)
+    print("total words:",len(words_dict))
 
 
 def write_partial_index():
@@ -209,13 +211,20 @@ def downloads():
 if __name__ == "__main__":
     ##downloads()
     # print("mansi".encode('utf-8'))
-    # start = time.time()
-    # parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
+    start = time.time()
+    parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
     # data = "ma[ns)] +=ik23}h'a@am!ka,rdh_oble"
     # print(re.findall("\d+|[\w]+",data))
     # print(list(string.punctuation))
     # nltk.download('stopwords')
     # print(nltk_stopwords.words('english'))
-    # print("time:",time.time()-start)
-
+    print("time:",time.time()-start)
+    # syms = ['* [', '*[', '*{{', '* {{', 'http']
+    # rsym = '[' + re.escape(''.join(syms)) + ']'
+    # print(rsym)
+    # print(re.search(rsym, "man* {{si"))
+    # if re.sub(rsym, '', "man*[si"):
+    #     print("yes")
+    # else:
+    #     print("no")
 
