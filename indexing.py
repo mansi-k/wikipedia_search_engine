@@ -8,10 +8,10 @@ from nltk.stem import WordNetLemmatizer
 from Stemmer import Stemmer
 from nltk.corpus import stopwords as nltk_stopwords
 import time
+import sys
 
 prefix = '{http://www.mediawiki.org/xml/export-0.10/}'
 page_dict = {}
-index_dir = "."
 words_dict = SortedDict({})  #defaultdict(list)
 try_till = None
 stopwords = list(nltk_stopwords.words('english'))
@@ -21,9 +21,10 @@ digits = [str(x) for x in range(10)]
 max_wordlen = 12
 min_wordlen = 3
 use_lematizer = False
-
+output_dir = "."
 stemmer = Stemmer('english')
 lemmatizer = WordNetLemmatizer()
+dump_count = 0
 
 def is_english(word):
     try:
@@ -34,7 +35,9 @@ def is_english(word):
         return True
 
 def tokenize(data):
+    global dump_count
     tokens = re.findall("\d+|[\w]+",str(data))  ## remove symbols by split text
+    dump_count += len(tokens)
     tokens = [str(w).lower() for w in tokens if len(w)>=min_wordlen and len(w)<=max_wordlen]  ## casefolding & utf encoding
     good_tokens = []
     rpun = '[' + re.escape(''.join(punctuations)) + ']'
@@ -83,15 +86,6 @@ def process_text(content,ctype):
         info = process_words(info,use_lematizer)
         return text, categories, links, info
 
-# def get_external_links(content):
-#     links = ""
-#     lines = content.split("==External links==")
-#     if len(lines) > 1:
-#         lines = lines[1].split("\n")
-#         for i in range(len(lines)):
-#             if '* [' in lines[i] or '*[' in lines[i] or '[http' in lines[i]:
-#                 links += lines[i]
-#     return links
 
 def get_sections(content) :
     text, categories, links, info = "", "", "", ""
@@ -186,47 +180,39 @@ def parseXML(xmlfile):
     # print(page_dict)
     write_partial_index()
     write_inverted_index()
-    print("total words:",len(words_dict))
 
 
 def write_partial_index():
-    global page_dict, index_dir
-    with open(index_dir+'/partial_index.txt', 'w') as f:
+    global page_dict, output_dir
+    with open(output_dir+'/title_index.txt', 'w') as f:
         for key in page_dict:
             f.write(str(key)+"|"+page_dict[key]+'\n')
 
 def write_inverted_index():
-    global words_dict, index_dir
-    with open(index_dir+'/inverted_index.txt', 'w') as f:
+    global words_dict, output_dir
+    with open(output_dir+'/index.txt', 'w') as f:
         for w,cl in words_dict.items():
             cur_line = w
             for c in cl:
                 cur_line = cur_line + '|' + c
-                # cur_line = cur_line + '|' + ",".join([str(x) for x in c])
             f.write(cur_line+'\n')
+    with open('meta.txt', 'w') as m:
+        m.write(str(len(words_dict)))
 
-def downloads():
-    nltk.download('wordnet')
-    nltk.download('stopwords')
+# def downloads():
+#     nltk.download('wordnet')
+#     nltk.download('stopwords')
 
 
 if __name__ == "__main__":
-    downloads()
-    # print("mansi".encode('utf-8'))
+    # global words_dict, output_dir, dump_count
+    if len(sys.argv)!= 3:
+        print("Usage : python3 indexing.py dump.xml ../inverted_indexes/2020201026")
+        sys.exit(0)
+    output_dir = sys.argv[2]
     start = time.time()
-    parseXML('enwiki-latest-pages-articles17.xml-p23570393p23716197')
-    # data = "ma[ns)] +=ik23}h'a@am!ka,rdh_oble"
-    # print(re.findall("\d+|[\w]+",data))
-    # print(list(string.punctuation))
-    # nltk.download('stopwords')
-    # print(nltk_stopwords.words('english'))
-    print("time:",time.time()-start)
-    # syms = ['* [', '*[', '*{{', '* {{', 'http']
-    # rsym = '[' + re.escape(''.join(syms)) + ']'
-    # print(rsym)
-    # print(re.search(rsym, "man* {{si"))
-    # if re.sub(rsym, '', "man*[si"):
-    #     print("yes")
-    # else:
-    #     print("no")
+    parseXML(sys.argv[1])
+    print("Total words in dump:",dump_count)
+    print("Total words in index:",len(words_dict))
+    print("Indexing time:",time.time()-start)
 
