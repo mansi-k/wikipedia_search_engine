@@ -1,3 +1,0 @@
-Total words in dump: 21728993
-Total words in index: 344942
-Indexing time: 106.48026275634766
