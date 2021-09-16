@@ -1,4 +1,6 @@
 import xml.etree.ElementTree as et
+# import xml.sax.handler
+from bz2file import BZ2File
 from sortedcontainers import SortedDict
 from collections import Counter, defaultdict
 import re
@@ -24,8 +26,10 @@ use_lematizer = False
 output_dir = "."
 stemmer = Stemmer('english')
 lemmatizer = WordNetLemmatizer()
-file_count = 0
-write_after = 100000
+file_count = 692
+write_after = 1000000
+docid = 0
+curpage_counts = {}
 
 def is_english(word):
     try:
@@ -42,7 +46,7 @@ def tokenize(data, istitle=False):
     data = re.sub(rpun, ' ', data.strip())  ## remove punctuations/symbols and split words using them
     if not istitle:
         data = re.sub(r'\w*\d\w*', '', data).strip()  ## omit words having digits in them if not in title
-    tokens = data.strip().lower().split()  ## casefolding sentence and splitting into words
+    tokens = data.strip().split()  ## splitting into words
     for t in tokens:
         if len(str(t))>=min_wordlen and len(str(t))<max_wordlen and is_english(t):
             good_tokens.append(t)
@@ -50,9 +54,7 @@ def tokenize(data, istitle=False):
 
 def remove_stopwords(words):
     good_words = []
-    # rstop = '[' + re.escape(''.join(stopwords)) + ']'
     for w in words:
-        # temp = re.sub(rpun, '', t)
         if w in stopwords or w in url_stopwords:
             continue
         good_words.append(w)
@@ -69,8 +71,7 @@ def process_words(words,lem):
 
 def process_text(content,ctype):
     global use_lematizer
-    # if not content:
-    #     return None
+    content = content.lower()  ## casefolding
     if ctype=='title':
         tokens = tokenize(content,True)
         words = process_words(tokens,use_lematizer)
@@ -90,26 +91,24 @@ def process_text(content,ctype):
 
 def get_sections(content) :
     text, categories, links, info = "", "", "", ""
-    # flgt, flgc, flgl, flgi = True, False, False, False
-    # print(flgt, flgc, flgl, flgi)
     lines = content.split('\n')
     i = 0
     n = len(lines)
     while i < n:
         # print(lines[i], type(lines[i]))
-        if "[[Category" in lines[i]:
-            line = lines[i].split("[[Category:")
+        if "[[category" in lines[i]:
+            line = lines[i].split("[[category:")
             if len(line)>1:
                 categories += " "+line[1].split(']]')[0]
-        elif "{{Infobox" in lines[i]:
+        elif "{{infobox" in lines[i]:
             # print(lines[i].split("{{Infobox")[1])
-            info += " "+lines[i].split("{{Infobox")[1]
+            info += " "+lines[i].split("{{infobox")[1]
             i += 1
             while i < n and '=' in lines[i]:
                 info += " "+lines[i].split('=')[1]
                 i += 1
-        elif "==External links==" in lines[i]:
-            links += " "+lines[i].split("==External links==")[1]
+        elif "==external links==" in lines[i]:
+            links += " "+lines[i].split("==external links==")[1]
             i += 1
             syms = ['* [', '*[', '*{{', '* {{', 'http']
             rsym = '[' + re.escape(''.join(syms)) + ']'
@@ -121,76 +120,11 @@ def get_sections(content) :
         i += 1
     return text, categories, links, info
 
-def parseXML(xmlfile):
-    global page_dict, try_till, write_after, words_dict, file_count
-    tree = et.parse(xmlfile)
-    root = tree.getroot()
-    i=0
-    for page in root.iter(prefix+'page'):
-        # print(elem.tag, elem.attrib)
-        curpage_counts = {}
-        page_dict[i] = ""
-        for pid in page.iter(prefix+'title'):
-            if not pid.text:
-                continue
-            page_dict[i] = pid.text
-            cur_words = process_text(pid.text,'title')
-            for w,c in Counter(cur_words).items():
-                # curpage_counts[w] = [i,c,0,0,0,0]  ## doc_id, title, text, cat, link, info
-                curpage_counts[w] = str(i)+";t"+str(c)
-        for ptxt in page.iter(prefix+'text'):
-            if not ptxt.text:
-                continue
-            cur_txt = ptxt.text
-            text, categories, links, info = process_text(ptxt.text,'body')
-            ## text words
-            for w,c in Counter(text).items():
-                if w not in curpage_counts:
-                    curpage_counts[w] = str(i)+";b"+str(c)
-                else:
-                    curpage_counts[w] += ";b"+str(c)
-            ## category words
-            for w,c in Counter(categories).items():
-                if w not in curpage_counts:
-                    curpage_counts[w] = str(i)+";c"+str(c)
-                else:
-                    curpage_counts[w] += ";c"+str(c)
-            ## links words
-            for w,c in Counter(links).items():
-                if w not in curpage_counts:
-                    curpage_counts[w] = str(i)+";l"+str(c)
-                else:
-                    curpage_counts[w] += ";l"+str(c)
-            ## info words
-            for w,c in Counter(info).items():
-                if w not in curpage_counts:
-                    curpage_counts[w] = str(i)+";i"+str(c)
-                else:
-                    curpage_counts[w] += ";i"+str(c)
-        for w,c in curpage_counts.items():
-            temp = words_dict.get(w,0)
-            if temp==0:
-                temp = []
-                # print(temp,type(temp),temp.append(c),c)
-            temp.append(c)
-            words_dict[w] = temp
-        if len(words_dict) >= write_after:
-            write_intermediate_index(file_count)
-            file_count += 1
-            words_dict = SortedDict({})
-        if try_till and i==try_till:
-            break
-        i+=1    
-    # print(page_dict)
-    write_title_index()
-    write_intermediate_index(file_count)
-
-
 def write_title_index():
     global page_dict, output_dir
-    with open(output_dir+'/title_index.txt', 'w') as f:
+    with open(output_dir+'/title_index.txt', 'a') as f:
         for key in page_dict:
-            f.write(str(key)+"|"+page_dict[key]+'\n')
+            f.write(str(key)+"|"+page_dict[key][0]+"|"+page_dict[key][1]+"\n")
 
 def write_intermediate_index(file_num):
     global words_dict, output_dir
@@ -204,19 +138,94 @@ def write_intermediate_index(file_num):
         m.write(str(file_num)+' '+str(len(words_dict))+'\n')
     print("dumped",file_num)
 
-# def downloads():
-#     nltk.download('wordnet')
-#     nltk.download('stopwords')
+def parseXML(context):
+    global page_dict, try_till, write_after, words_dict, file_count, curpage_counts, docid
+    for event, elem in context:
+        if elem.tag == prefix+"title":
+            ## Uncomment this if you need to continue prcessing after a break
+            # if docid <= 3780932:
+            #     continue
+            page_dict[docid] = ["-","0"]
+            # print("title",elem.text)
+            if not elem.text:
+                continue
+            page_dict[docid][0] = elem.text
+            cur_words = process_text(elem.text,'title')
+            for w,c in Counter(cur_words).items():
+                curpage_counts[w] = str(docid)+";t"+str(c)
+        elif elem.tag == prefix+"text":
+            ## Uncomment this if you need to continue prcessing after a break
+            # if docid <= 3780932:
+            #     continue
+            if not elem.text:
+                continue
+            text, categories, links, info = process_text(elem.text,'body')
+            ## text words
+            for w,c in Counter(text).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = str(docid)+";b"+str(c)
+                else:
+                    curpage_counts[w] += ";b"+str(c)
+            ## category words
+            for w,c in Counter(categories).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = str(docid)+";c"+str(c)
+                else:
+                    curpage_counts[w] += ";c"+str(c)
+            ## links words
+            for w,c in Counter(links).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = str(docid)+";l"+str(c)
+                else:
+                    curpage_counts[w] += ";l"+str(c)
+            ## info words
+            for w,c in Counter(info).items():
+                if w not in curpage_counts:
+                    curpage_counts[w] = str(docid)+";i"+str(c)
+                else:
+                    curpage_counts[w] += ";i"+str(c)
+            body_count = len(text) + len(categories) + len(links) + len(info)
+            page_dict[docid][1] = str(body_count)
+            print("completed doc",docid,body_count,file_count)
+        elif elem.tag == prefix+"page":
+            ## Uncomment this if you need to continue prcessing after a break
+            # if docid <= 3780932:
+            #     docid += 1
+            #     if docid%10000 == 0: print(docid)
+            #     elem.clear()
+            #     continue
+            for w,c in curpage_counts.items():
+                temp = words_dict.get(w,0)
+                if temp==0:
+                    temp = []
+                temp.append(c)
+                words_dict[w] = temp
+            if len(words_dict) >= write_after:
+                write_intermediate_index(file_count)
+                write_title_index()
+                file_count += 1
+                page_dict = {}
+                words_dict = SortedDict({})
+            docid += 1    
+            curpage_counts = {}
+            elem.clear()
+    
 
 
 if __name__ == "__main__":
     if len(sys.argv)!= 3:
-        print("Usage : python3 indexing.py dump.xml ../inverted_indexes/2020201026")
+        print("Usage : python3 indexing.py dump.xml ../inverted_indexes_dir_path")
         sys.exit(0)
     output_dir = sys.argv[2]
     with open(output_dir+'/meta_index.txt', 'w') as m:
         pass
+    with open(output_dir+'/title_index.txt', 'w') as m:
+        pass
     start = time.time()
-    parseXML(sys.argv[1])
-    print("Total words in index:",len(words_dict))
+    with BZ2File(sys.argv[1]) as xml_file:
+        context = et.iterparse(xml_file)
+        parseXML(context)
+    
+    write_title_index()
+    write_intermediate_index(file_count)
     print("Indexing time:",time.time()-start)

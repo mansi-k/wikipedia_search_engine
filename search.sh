@@ -1,3 +1,4 @@
 #!/bin/bash
 
-python3 searching.py "$1" "$2"
+python nltk_download.py
+python search.py "$1" "$2"
